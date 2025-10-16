@@ -57,19 +57,6 @@ struct Message {
     is_unread: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct SearchChatsResponse {
-    items: Vec<Chat>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Chat {
-    #[allow(dead_code)]
-    id: String,
-    #[serde(rename = "isMuted", default)]
-    is_muted: bool,
-}
-
 struct BeeperClient {
     client: Client,
     api_url: String,
@@ -101,40 +88,7 @@ impl BeeperClient {
         }
     }
 
-    async fn get_muted_chat_ids(&self) -> Result<std::collections::HashSet<String>> {
-        let url = format!("{}/v0/chats", self.api_url);
-
-        let response = self.client
-            .get(&url)
-            .bearer_auth(&self.token)
-            .query(&[
-                ("includeMuted", "true"),
-                ("limit", "1000"),
-            ])
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!("Failed to fetch chats: {}", response.status()));
-        }
-
-        let chats: SearchChatsResponse = response.json().await?;
-
-        let muted_ids: std::collections::HashSet<String> = chats.items
-            .into_iter()
-            .filter(|chat| chat.is_muted)
-            .map(|chat| chat.id)
-            .collect();
-
-        debug!("Found {} muted chats", muted_ids.len());
-
-        Ok(muted_ids)
-    }
-
     async fn get_recent_unread_count(&self, max_age_days: i64) -> Result<u32> {
-        // First, get the list of muted chat IDs
-        let muted_chat_ids = self.get_muted_chat_ids().await?;
-
         let url = format!("{}/v0/search-messages", self.api_url);
 
         let mut query_params = vec![
@@ -165,25 +119,24 @@ impl BeeperClient {
 
         let messages: SearchMessagesResponse = response.json().await?;
 
-        // Filter out messages from muted chats
         let total_unread = messages.items
             .iter()
-            .filter(|msg| msg.is_unread && !muted_chat_ids.contains(&msg.chat_id))
+            .filter(|msg| msg.is_unread)
             .count() as u32;
 
         if total_unread > 0 {
-            debug!("Found {} unread messages (excluding muted chats)", total_unread);
+            debug!("Found {} unread messages", total_unread);
 
             // Group by chat for better logging
             use std::collections::HashMap;
             let mut chat_counts: HashMap<&str, u32> = HashMap::new();
             for msg in &messages.items {
-                if msg.is_unread && !muted_chat_ids.contains(&msg.chat_id) {
+                if msg.is_unread {
                     *chat_counts.entry(&msg.chat_id).or_insert(0) += 1;
                 }
             }
 
-            debug!("  Unread messages across {} non-muted chats", chat_counts.len());
+            debug!("  Unread messages across {} chats", chat_counts.len());
         }
 
         Ok(total_unread)
