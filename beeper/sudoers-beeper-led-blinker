@@ -1,0 +1,7 @@
+# Allow user to control Caps Lock LED without password for beeper-led-blinker
+# Copy this file to /etc/sudoers.d/beeper-led-blinker
+# Usage: sudo cp sudoers-beeper-led-blinker /etc/sudoers.d/beeper-led-blinker
+#        sudo chmod 440 /etc/sudoers.d/beeper-led-blinker
+
+Defaults!/usr/bin/tee !syslog
+ALL ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/leds/input3\:\:capslock/brightness
