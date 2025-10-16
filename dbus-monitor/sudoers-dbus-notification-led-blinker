@@ -1,0 +1,5 @@
+# Usage: sudo cp sudoers-dbus-notification-led-blinker /etc/sudoers.d/dbus-notification-led-blinker
+#        sudo chmod 440 /etc/sudoers.d/dbus-notification-led-blinker
+
+Defaults!/usr/bin/tee !syslog
+ALL ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/leds/input3\:\:capslock/brightness

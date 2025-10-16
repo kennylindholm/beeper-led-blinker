@@ -1,0 +1,17 @@
+[Unit]
+Description=DBus Notification LED Blinker - Blink LED on notification filter matches
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/dbus-notification-led-blinker --filter "YOUR_FILTER_PATTERN" --led-path /sys/class/leds/input3::capslock/brightness --blink-interval 500 --case-insensitive
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dbus-notification-led-blinker
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target
