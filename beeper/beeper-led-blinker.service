@@ -1,0 +1,17 @@
+[Unit]
+Description=Beeper LED Blinker
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/beeper-led-blinker --token YOUR_TOKEN --led-path /sys/class/leds/input3::capslock/brightness --api-url http://localhost:23373 --interval 5 --blink-interval 500 --max-age-days 7
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=beeper-led-blinker
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target
