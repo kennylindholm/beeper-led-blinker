@@ -158,6 +158,10 @@ The sudoers config (`/etc/sudoers.d/beeper-blinker`) allows passwordless `tee` t
 
 Uses less resources than a Chrome tab (shocking, I know) and definitely less than Electron-based chat apps. Your laptop battery will thank you, unlike when you run Discord.
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Legal Disclaimer
 
 Not responsible for:
