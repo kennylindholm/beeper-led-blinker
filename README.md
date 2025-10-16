@@ -6,6 +6,10 @@ Built for a Lenovo Z16 Gen 2 currently running on Fedora 42, but should work on 
 
 An LLM helped write most of this code because apparently I needed AI assistance to make an LED go blink-blink. The future is weird.
 
+## Demo
+
+![LED Blink Demo](blink-demo.webp)
+
 ## Why?
 
 Because getting a notification on your phone, computer, smartwatch, and smart fridge wasn't enough. Now your keyboard can judge you for having unread messages too.
