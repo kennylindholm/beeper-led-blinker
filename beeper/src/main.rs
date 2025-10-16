@@ -40,25 +40,21 @@ struct Args {
 }
 
 #[derive(Debug, Deserialize)]
-struct SearchChatsResponse {
-    items: Vec<Chat>,
+struct SearchMessagesResponse {
+    items: Vec<Message>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Chat {
+struct Message {
     #[allow(dead_code)]
     id: String,
-    title: String,
-    network: String,
-    #[serde(rename = "unreadCount")]
-    unread_count: u32,
-    #[serde(rename = "lastActivity")]
+    #[serde(rename = "chatID")]
     #[allow(dead_code)]
-    last_activity: DateTime<Utc>,
-    #[serde(rename = "isArchived")]
-    is_archived: bool,
-    #[serde(rename = "isMuted")]
-    is_muted: bool,
+    chat_id: String,
+    #[allow(dead_code)]
+    timestamp: DateTime<Utc>,
+    #[serde(rename = "isUnread", default)]
+    is_unread: bool,
 }
 
 struct BeeperClient {
@@ -78,7 +74,7 @@ impl BeeperClient {
     }
 
     async fn is_api_available(&self) -> bool {
-        let url = format!("{}/v0/search-chats", self.api_url);
+        let url = format!("{}/v0/search-messages", self.api_url);
 
         match self.client
             .get(&url)
@@ -93,11 +89,11 @@ impl BeeperClient {
     }
 
     async fn get_recent_unread_count(&self, max_age_days: i64) -> Result<u32> {
-        let url = format!("{}/v0/search-chats", self.api_url);
+        let url = format!("{}/v0/search-messages", self.api_url);
 
         let mut query_params = vec![
             ("unreadOnly", "true".to_string()),
-            ("limit", "200".to_string()),
+            ("limit", "500".to_string()),
         ];
 
         // Only add date filter if max_age_days > 0
@@ -105,7 +101,7 @@ impl BeeperClient {
             let cutoff_date = Utc::now() - Duration::days(max_age_days);
             let cutoff_date_str = cutoff_date.format("%Y-%m-%dT%H:%M:%SZ").to_string();
             debug!("Checking for unread messages newer than {}", cutoff_date.format("%Y-%m-%d %H:%M:%S"));
-            query_params.push(("lastActivityAfter", cutoff_date_str));
+            query_params.push(("after", cutoff_date_str));
         } else {
             debug!("Checking for unread messages (all history)");
         }
@@ -121,27 +117,26 @@ impl BeeperClient {
             return Err(anyhow::anyhow!("API request failed: {}", response.status()));
         }
 
-        let chats: SearchChatsResponse = response.json().await?;
+        let messages: SearchMessagesResponse = response.json().await?;
 
-        let total_unread = chats.items
+        let total_unread = messages.items
             .iter()
-            .filter(|chat| !chat.is_archived && !chat.is_muted)
-            .map(|chat| chat.unread_count)
-            .sum();
+            .filter(|msg| msg.is_unread)
+            .count() as u32;
 
         if total_unread > 0 {
-            debug!("Found {} unread messages from {} chats",
-                   total_unread,
-                   chats.items.len());
+            debug!("Found {} unread messages", total_unread);
 
-            for chat in &chats.items {
-                if chat.unread_count > 0 {
-                    debug!("  [{}] {}: {} unread",
-                           chat.network,
-                           chat.title,
-                           chat.unread_count);
+            // Group by chat for better logging
+            use std::collections::HashMap;
+            let mut chat_counts: HashMap<&str, u32> = HashMap::new();
+            for msg in &messages.items {
+                if msg.is_unread {
+                    *chat_counts.entry(&msg.chat_id).or_insert(0) += 1;
                 }
             }
+
+            debug!("  Unread messages across {} chats", chat_counts.len());
         }
 
         Ok(total_unread)
@@ -234,7 +229,7 @@ async fn main() -> Result<()> {
                     led.stop_blinking()?;
                     currently_blinking = false;
                 } else if unread_count > 0 {
-                    info!("Still have {} unread messages - LED continues blinking", unread_count);
+                    debug!("Still have {} unread messages - LED continues blinking", unread_count);
                 }
             }
             Err(e) => {
