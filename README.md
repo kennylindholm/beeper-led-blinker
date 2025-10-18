@@ -157,9 +157,9 @@ The sudoers config (`/etc/sudoers.d/beeper-blinker`) allows passwordless `tee` t
 
 ## Performance
 
-~1-2MB RAM, negligible CPU usage. Binary is ~8MB.
+~1-2MB RAM, negligible CPU usage. Binary is ~5MB.
 
-Uses less resources than a Chrome tab (shocking, I know) and definitely less than Electron-based chat apps. Your laptop battery will thank you, unlike when you run Discord.
+Uses less resources than a Chrome tab (shocking, I know) and definitely less than Electron-based chat apps. Your laptop battery will thank you.
 
 ## License
 
