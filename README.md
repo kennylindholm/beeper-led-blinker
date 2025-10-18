@@ -4,7 +4,7 @@ Blinks your Caps Lock LED when you have unread Beeper messages because it's cool
 
 Built for a Lenovo Z16 Gen 2 currently running on Fedora 42, but should work on any Linux machine where you can write to `/sys/class/leds/`.
 
-An LLM helped write most of this code because apparently I needed AI assistance to make an LED go blink-blink. The future is weird.
+An LLM helped write most of this code because apparently I needed AI assistance to make an LED go blink-blink.
 
 ## Demo
 
@@ -18,7 +18,7 @@ Also, blinking LEDs are scientifically proven to make everything cooler.
 
 ## What it does
 
-- Polls Beeper Desktop's API for unread messages
+- Polls [Beeper Desktop's API](https://developers.beeper.com/desktop-api) for unread messages
 - Filters by age (default: last 7 days) and ignores archived chats
 - Blinks your Caps Lock LED when you have unread messages
 - Reconnects automatically if Beeper Desktop restarts
@@ -28,15 +28,18 @@ Also, blinking LEDs are scientifically proven to make everything cooler.
 ## Requirements
 
 - Rust (for building)
-- Beeper Desktop v4.1.169+ with API enabled
+- [Beeper Desktop](https://www.beeper.com/download) v4.1.169+ with API enabled
 - Sudo permissions to write to LED sysfs paths (see sudoers setup below)
 - A machine with LEDs controllable via `/sys/class/leds/` (tested on Lenovo Z16 Gen 2)
+
+For more details about the Beeper Desktop API, see the [official documentation](https://developers.beeper.com/desktop-api) and [API reference](https://developers.beeper.com/desktop-api-reference).
 
 ### Setup
 
 1. **Enable Beeper Desktop API**:
    - Settings → Developers → Enable "Beeper Desktop API"
    - Generate a Bearer token
+   - For detailed instructions, see the [authentication guide](https://developers.beeper.com/desktop-api/auth)
 
 2. **Configure sudo for LED control** (so you don't need to run the whole thing as root):
    ```bash
@@ -145,7 +148,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "http://localhost:23373/v0/search-cha
 
 ## How it works
 
-1. Polls Beeper's local API (`http://localhost:23373`) every 5 seconds
+1. Polls [Beeper's local API](https://developers.beeper.com/desktop-api-reference) (`http://localhost:23373`) every 5 seconds
 2. Filters for unread messages within the configured time window
 3. Writes `1` or `0` to `/sys/class/leds/input3::capslock/brightness` via sudo
 4. Repeats until you kill it
