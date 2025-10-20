@@ -37,6 +37,14 @@ struct Args {
     /// Only check messages newer than this many days (0 = all history)
     #[arg(long, default_value = "7")]
     max_age_days: i64,
+
+    /// Filter out messages from archived chats
+    #[arg(long, default_value = "true")]
+    exclude_archived: bool,
+
+    /// Filter out messages from muted chats
+    #[arg(long, default_value = "true")]
+    exclude_muted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,7 +96,7 @@ impl BeeperClient {
         }
     }
 
-    async fn get_recent_unread_count(&self, max_age_days: i64) -> Result<u32> {
+    async fn get_recent_unread_count(&self, max_age_days: i64, exclude_archived: bool, exclude_muted: bool) -> Result<u32> {
         let url = format!("{}/v0/search-messages", self.api_url);
 
         let mut query_params = vec![
@@ -104,6 +112,16 @@ impl BeeperClient {
             query_params.push(("after", cutoff_date_str));
         } else {
             debug!("Checking for unread messages (all history)");
+        }
+
+        // Add archive filter
+        if exclude_archived {
+            query_params.push(("excludeArchived", "true".to_string()));
+        }
+
+        // Add muted filter
+        if exclude_muted {
+            query_params.push(("excludeMuted", "true".to_string()));
         }
 
         let response = self.client
@@ -174,6 +192,8 @@ async fn main() -> Result<()> {
     } else {
         info!("Max message age: all history");
     }
+    info!("Exclude archived chats: {}", args.exclude_archived);
+    info!("Exclude muted chats: {}", args.exclude_muted);
 
     // Initialize LED controller
     let mut led = LedController::new(args.led_path, args.blink_interval)?;
@@ -185,7 +205,7 @@ async fn main() -> Result<()> {
     wait_for_api(&beeper).await?;
 
     // Check initial state
-    let initial_unread = beeper.get_recent_unread_count(args.max_age_days).await?;
+    let initial_unread = beeper.get_recent_unread_count(args.max_age_days, args.exclude_archived, args.exclude_muted).await?;
     let mut currently_blinking = false;
 
     if initial_unread > 0 {
@@ -218,7 +238,7 @@ async fn main() -> Result<()> {
         }
 
         // Get current unread count
-        match beeper.get_recent_unread_count(args.max_age_days).await {
+        match beeper.get_recent_unread_count(args.max_age_days, args.exclude_archived, args.exclude_muted).await {
             Ok(unread_count) => {
                 if unread_count > 0 && !currently_blinking {
                     info!("Found {} unread messages - starting LED blink", unread_count);

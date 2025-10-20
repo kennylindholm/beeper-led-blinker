@@ -5,7 +5,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/beeper-led-blinker --token YOUR_TOKEN --led-path /sys/class/leds/input3::capslock/brightness --api-url http://localhost:23373 --interval 5 --blink-interval 500 --max-age-days 7
+ExecStart=%h/.local/bin/beeper-led-blinker --token YOUR_TOKEN --led-path /sys/class/leds/input3::capslock/brightness --api-url http://localhost:23373 --interval 5 --blink-interval 500 --max-age-days 7 --exclude-muted=true --exclude-archived=true
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

@@ -25,6 +25,15 @@ Also, blinking LEDs are scientifically proven to make everything cooler.
 - Runs as a systemd user service
 - Written in Rust because I wanted a single binary with minimal overhead
 
+## Project Structure
+
+This project is organized as a Rust workspace with two main components:
+
+- **`beeper`** - The main binary crate that handles Beeper API integration and orchestrates the LED blinking
+- **`led-controller`** - A reusable library crate that provides LED control functionality through Linux sysfs
+
+The `led-controller` crate can be used independently in other projects that need to control LEDs on Linux systems.
+
 ## Requirements
 
 - Rust (for building)
