@@ -19,7 +19,7 @@ Also, blinking LEDs are scientifically proven to make everything cooler.
 ## What it does
 
 - Polls [Beeper Desktop's API](https://developers.beeper.com/desktop-api) for unread messages
-- Filters by age (default: last 7 days) and ignores archived chats
+- Filters by age (default: last 7 days) and optionally excludes archived, muted, or low priority chats
 - Blinks your Caps Lock LED when you have unread messages
 - Reconnects automatically if Beeper Desktop restarts
 - Runs as a systemd user service
@@ -98,6 +98,9 @@ systemctl --user start beeper-led-blinker.service
 --interval <INTERVAL>              Check interval in seconds [default: 5]
 --blink-interval <BLINK_INTERVAL>  Blink interval in milliseconds [default: 500]
 --max-age-days <MAX_AGE_DAYS>      Only check messages newer than N days (0 = all history) [default: 7]
+--exclude-archived <true/false>    Filter out messages from archived chats [default: false]
+--exclude-muted <true/false>       Filter out messages from muted chats [default: false]
+--exclude-low-priority <true/false> Filter out messages from low priority chats [default: false]
 ```
 
 ### Examples
@@ -108,6 +111,9 @@ systemctl --user start beeper-led-blinker.service
 
 # Only care about messages from last 3 days
 ./target/release/beeper-led-blinker --token YOUR_TOKEN --max-age-days 3 --interval 10
+
+# Include messages from muted chats but exclude low priority ones
+./target/release/beeper-led-blinker --token YOUR_TOKEN --exclude-muted false --exclude-low-priority true
 
 # Different LED path (find yours with: ls /sys/class/leds/)
 ./target/release/beeper-led-blinker --token YOUR_TOKEN --led-path /sys/class/leds/input6::capslock/brightness
@@ -152,7 +158,10 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "http://localhost:23373/v0/search-cha
 
 **Not detecting messages?**
 - Default only checks last 7 days - use `--max-age-days 30` for older messages
-- Archived chats are ignored
+- Archived and muted chats are ignored by default
+- Low priority chats are included by default - use `--exclude-low-priority true` to filter them out
+  - Low priority chats are typically group chats or channels with many participants where individual messages may be less urgent
+- Check your filtering settings: `--exclude-archived`, `--exclude-muted`, `--exclude-low-priority`
 - Use `RUST_LOG=debug` to see what's happening
 
 ## How it works
