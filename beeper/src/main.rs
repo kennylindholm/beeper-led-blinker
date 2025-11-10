@@ -37,6 +37,18 @@ struct Args {
     /// Only check messages newer than this many days (0 = all history)
     #[arg(long, default_value = "7")]
     max_age_days: i64,
+
+    /// Filter out messages from archived chats
+    #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+    exclude_archived: bool,
+
+    /// Filter out messages from muted chats
+    #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+    exclude_muted: bool,
+
+    /// Filter out messages from low priority chats
+    #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+    exclude_low_priority: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,38 +100,84 @@ impl BeeperClient {
         }
     }
 
-    async fn get_recent_unread_count(&self, max_age_days: i64) -> Result<u32> {
+    async fn get_recent_unread_count(&self, max_age_days: i64, exclude_archived: bool, exclude_muted: bool, exclude_low_priority: bool) -> Result<u32> {
         let url = format!("{}/v0/search-messages", self.api_url);
 
-        let mut query_params = vec![
-            ("unreadOnly", "true".to_string()),
-            ("limit", "500".to_string()),
-        ];
+        // API limit is max 20 per request, so we need to paginate
+        let limit_per_page = 20;
+        let mut all_messages = Vec::new();
+        let mut cursor: Option<String> = None;
 
-        // Only add date filter if max_age_days > 0
-        if max_age_days > 0 {
-            let cutoff_date = Utc::now() - Duration::days(max_age_days);
-            let cutoff_date_str = cutoff_date.format("%Y-%m-%dT%H:%M:%SZ").to_string();
-            debug!("Checking for unread messages newer than {}", cutoff_date.format("%Y-%m-%d %H:%M:%S"));
-            query_params.push(("after", cutoff_date_str));
-        } else {
-            debug!("Checking for unread messages (all history)");
+        loop {
+            let mut query_params = vec![
+                ("unreadOnly", "true".to_string()),
+                ("limit", limit_per_page.to_string()),
+            ];
+
+            // Only add date filter if max_age_days > 0
+            if max_age_days > 0 {
+                let cutoff_date = Utc::now() - Duration::days(max_age_days);
+                let cutoff_date_str = cutoff_date.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                if cursor.is_none() {
+                    debug!("Checking for unread messages newer than {}", cutoff_date.format("%Y-%m-%d %H:%M:%S"));
+                }
+                query_params.push(("after", cutoff_date_str));
+            } else if cursor.is_none() {
+                debug!("Checking for unread messages (all history)");
+            }
+
+            // Add archive filter
+            if exclude_archived {
+                query_params.push(("excludeArchived", "true".to_string()));
+            }
+
+            // Add muted filter
+            if exclude_muted {
+                query_params.push(("excludeMuted", "true".to_string()));
+            }
+
+            // Add low priority filter
+            if exclude_low_priority {
+                query_params.push(("excludeLowPriority", "true".to_string()));
+            }
+
+            // Add cursor for pagination if available
+            if let Some(ref cursor_value) = cursor {
+                query_params.push(("cursor", cursor_value.clone()));
+            }
+
+            let response = self.client
+                .get(&url)
+                .bearer_auth(&self.token)
+                .query(&query_params)
+                .send()
+                .await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error response".to_string());
+                return Err(anyhow::anyhow!("API request failed: {} - {}", status, error_body));
+            }
+
+            let messages: SearchMessagesResponse = response.json().await?;
+            
+            let page_size = messages.items.len();
+            all_messages.extend(messages.items);
+
+            // If we got fewer items than the limit, we've reached the end
+            if page_size < limit_per_page {
+                break;
+            }
+
+            // Otherwise, use the last message ID as cursor for next page
+            if let Some(last_msg) = all_messages.last() {
+                cursor = Some(last_msg.id.clone());
+            } else {
+                break;
+            }
         }
 
-        let response = self.client
-            .get(&url)
-            .bearer_auth(&self.token)
-            .query(&query_params)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!("API request failed: {}", response.status()));
-        }
-
-        let messages: SearchMessagesResponse = response.json().await?;
-
-        let total_unread = messages.items
+        let total_unread = all_messages
             .iter()
             .filter(|msg| msg.is_unread)
             .count() as u32;
@@ -130,7 +188,7 @@ impl BeeperClient {
             // Group by chat for better logging
             use std::collections::HashMap;
             let mut chat_counts: HashMap<&str, u32> = HashMap::new();
-            for msg in &messages.items {
+            for msg in &all_messages {
                 if msg.is_unread {
                     *chat_counts.entry(&msg.chat_id).or_insert(0) += 1;
                 }
@@ -174,6 +232,9 @@ async fn main() -> Result<()> {
     } else {
         info!("Max message age: all history");
     }
+    info!("Exclude archived chats: {}", args.exclude_archived);
+    info!("Exclude muted chats: {}", args.exclude_muted);
+    info!("Exclude low priority chats: {}", args.exclude_low_priority);
 
     // Initialize LED controller
     let mut led = LedController::new(args.led_path, args.blink_interval)?;
@@ -185,7 +246,7 @@ async fn main() -> Result<()> {
     wait_for_api(&beeper).await?;
 
     // Check initial state
-    let initial_unread = beeper.get_recent_unread_count(args.max_age_days).await?;
+    let initial_unread = beeper.get_recent_unread_count(args.max_age_days, args.exclude_archived, args.exclude_muted, args.exclude_low_priority).await?;
     let mut currently_blinking = false;
 
     if initial_unread > 0 {
@@ -218,7 +279,7 @@ async fn main() -> Result<()> {
         }
 
         // Get current unread count
-        match beeper.get_recent_unread_count(args.max_age_days).await {
+        match beeper.get_recent_unread_count(args.max_age_days, args.exclude_archived, args.exclude_muted, args.exclude_low_priority).await {
             Ok(unread_count) => {
                 if unread_count > 0 && !currently_blinking {
                     info!("Found {} unread messages - starting LED blink", unread_count);
