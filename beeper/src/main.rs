@@ -38,16 +38,16 @@ struct Args {
     #[arg(long, default_value = "7")]
     max_age_days: i64,
 
-    /// Filter out messages from archived chats
+    /// Filter out messages from archived chats (NOT SUPPORTED - will be ignored)
     #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
     exclude_archived: bool,
 
-    /// Filter out messages from muted chats
+    /// Filter out messages from muted chats (default: false, meaning muted chats ARE included)
     #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
     exclude_muted: bool,
 
-    /// Filter out messages from low priority chats
-    #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+    /// Filter out messages from low priority chats (default: true, matching API behavior)
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     exclude_low_priority: bool,
 }
 
@@ -86,7 +86,7 @@ impl BeeperClient {
     }
 
     async fn is_api_available(&self) -> bool {
-        let url = format!("{}/v0/search-messages", self.api_url);
+        let url = format!("{}/v1/messages/search", self.api_url);
 
         match self.client
             .get(&url)
@@ -101,7 +101,7 @@ impl BeeperClient {
     }
 
     async fn get_recent_unread_count(&self, max_age_days: i64, exclude_archived: bool, exclude_muted: bool, exclude_low_priority: bool) -> Result<u32> {
-        let url = format!("{}/v0/search-messages", self.api_url);
+        let url = format!("{}/v1/messages/search", self.api_url);
 
         // API limit is max 20 per request, so we need to paginate
         let limit_per_page = 20;
@@ -126,19 +126,22 @@ impl BeeperClient {
                 debug!("Checking for unread messages (all history)");
             }
 
-            // Add archive filter
+            // Note: excludeArchived is NOT supported by the Beeper API
+            // Archived chats cannot be filtered server-side
             if exclude_archived {
-                query_params.push(("excludeArchived", "true".to_string()));
+                warn!("--exclude-archived is not supported by the Beeper API and will be ignored");
             }
 
-            // Add muted filter
+            // Add muted filter (API uses includeMuted, default is true)
+            // If user wants to exclude muted, we set includeMuted=false
             if exclude_muted {
-                query_params.push(("excludeMuted", "true".to_string()));
+                query_params.push(("includeMuted", "false".to_string()));
             }
 
-            // Add low priority filter
-            if exclude_low_priority {
-                query_params.push(("excludeLowPriority", "true".to_string()));
+            // Add low priority filter (API default is excludeLowPriority=true)
+            // Only need to set if user wants to INCLUDE low priority
+            if !exclude_low_priority {
+                query_params.push(("excludeLowPriority", "false".to_string()));
             }
 
             // Add cursor for pagination if available
